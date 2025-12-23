@@ -16,40 +16,35 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { RegisterUserDto } from 'src/user/dto/register-user.dto';
 import { LoginUserDto } from 'src/user/dto/login-user.dto';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { storage } from 'src/user/oss';
 import path from 'path';
+import * as fs from 'fs';
 
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post('upload/large')
-  @UseInterceptors(
-    FilesInterceptor('files', 20, {
-      dest: 'uploads',
-      storage: storage,
-      limits: {
-        fileSize: 1024 * 1024 * 3,
-      },
-      fileFilter(req, file, callback) {
-        const extName = path.extname(file.originalname);
-        if (['.jpg', '.png', '.gif'].includes(extName)) {
-          callback(null, true);
-        } else {
-          callback(new BadRequestException('Upload file failed!'), false);
-        }
-      },
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', { dest: 'uploads' }))
   uploadLargeFile(
-    @UploadedFiles() files: Array<Express.Multer.File>,
-    @Body() body,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { name: string },
   ) {
-    console.log(body);
-    console.log(files);
+    console.log('🔥 ENTER uploadLargeFile');
+    console.log('file:', file);
+    console.log('body:', body);
 
-    return body;
+    const filename = body.name.match(/(.+)-\d+$/)?.[1] ?? body.name;
+
+    const nameDir = 'uploads/chunks-' + filename;
+
+    if (!fs.existsSync(nameDir)) fs.mkdirSync(nameDir);
+
+    fs.cpSync(file.path, path.join(nameDir, body.name));
+    fs.rmSync(file.path);
+
+    return { ok: true, nameDir };
   }
 
   @Post('upload/avatar')
